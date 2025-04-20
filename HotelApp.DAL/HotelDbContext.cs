@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using HotelApp.DAL.Entities;
+using Microsoft.EntityFrameworkCore.Proxies;
 
 namespace HotelApp.DAL;
 
@@ -10,7 +11,12 @@ public class HotelDbContext : DbContext
     public DbSet<Booking> Bookings { get; set; }
 
     public HotelDbContext(DbContextOptions<HotelDbContext> options)
-    : base(options) { }
+        : base(options) { }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseLazyLoadingProxies(); // Включає Lazy Loading
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

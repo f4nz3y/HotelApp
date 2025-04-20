@@ -6,5 +6,5 @@ public class RoomCategory
     public string Name { get; set; }
     public decimal BasePrice { get; set; }
 
-    public ICollection<Room> Rooms { get; set; }
+    public virtual ICollection<Room> Rooms { get; set; } // virtual для Lazy Loading
 }
