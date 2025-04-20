@@ -6,6 +6,8 @@ public class Booking
     public int RoomId { get; set; }
     public Room Room { get; set; }
 
+    public string ClientName { get; set; } = string.Empty;
+
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
 }
