@@ -3,6 +3,7 @@ using HotelApp.Core.Services;
 using HotelApp.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using HotelApp.Core.Factories;
 
 var services = new ServiceCollection();
 
@@ -118,12 +119,18 @@ while (running)
             break;
 
         case "6":
-            Console.Write("Номер кiмнати: ");
+            Console.Write("Номер кімнати: ");
             string number = Console.ReadLine()!;
-            Console.Write("ID категорiї: ");
-            int categoryId = int.Parse(Console.ReadLine()!);
-            service.AddRoom(new Room { Number = number, Status = RoomStatus.Available, CategoryId = categoryId });
-            Console.WriteLine("Кiмнату додано.");
+
+            Console.WriteLine("Оберіть тип кімнати (1 - Standard, 2 - Deluxe): ");
+            var roomType = Console.ReadLine();
+
+            IRoomFactory factory = roomType == "2"
+                ? new DeluxeRoomFactory()
+                : new StandardRoomFactory();
+
+            service.AddRoomViaFactory(factory, number);
+            Console.WriteLine("Кімнату додано.");
             break;
 
         case "7":

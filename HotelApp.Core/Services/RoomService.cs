@@ -1,4 +1,5 @@
-﻿using HotelApp.DAL;
+﻿using HotelApp.Core.Factories;
+using HotelApp.DAL;
 using HotelApp.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -86,13 +87,26 @@ public class RoomService
         }
     }
 
-    // CRUD
     public IEnumerable<Room> GetAllRooms() => _context.Rooms.Include(r => r.Category).ToList();
 
     public Room? GetRoom(int id) => _context.Rooms.Include(r => r.Category).FirstOrDefault(r => r.Id == id);
 
-    public void AddRoom(Room room)
+    public void AddRoomViaFactory(IRoomFactory factory, string number)
     {
+        var (room, category) = factory.CreateRoom(number);
+
+        var existingCategory = _context.Categories
+            .FirstOrDefault(c => c.Name == category.Name);
+
+        if (existingCategory != null)
+        {
+            room.Category = existingCategory;
+        }
+        else
+        {
+            _context.Categories.Add(category);
+        }
+
         _context.Rooms.Add(room);
         _context.SaveChanges();
     }

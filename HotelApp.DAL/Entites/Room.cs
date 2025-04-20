@@ -7,7 +7,7 @@ public class Room
     public RoomStatus Status { get; set; }
 
     public int CategoryId { get; set; }
-    public virtual RoomCategory Category { get; set; } // virtual для Lazy Loading
+    public virtual RoomCategory Category { get; set; }
 
-    public virtual ICollection<Booking> Bookings { get; set; } // virtual для Lazy Loading
+    public virtual ICollection<Booking> Bookings { get; set; }
 }
