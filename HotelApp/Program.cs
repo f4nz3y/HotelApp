@@ -17,7 +17,10 @@ var provider = services.BuildServiceProvider();
 using var scope = provider.CreateScope();
 
 var context = scope.ServiceProvider.GetRequiredService<HotelDbContext>();
-context.Database.EnsureCreated();
+if (context.Database.GetPendingMigrations().Any())
+{
+    context.Database.Migrate();
+}
 
 var service = scope.ServiceProvider.GetRequiredService<RoomService>();
 service.SeedData();
