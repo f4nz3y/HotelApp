@@ -1,103 +1,162 @@
-﻿using HotelApp.DAL;
+﻿using AutoMapper;
+using HotelApp.Core.Factories;
+using HotelApp.Core.Interfaces;
+using HotelApp.Core.Models;
 using HotelApp.Core.Services;
+using HotelApp.DAL;
 using HotelApp.DAL.Entities;
+using HotelApp.DAL.Interfaces;
+using HotelApp.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using HotelApp.Core.Factories;
+using System;
+using System.Linq;
 
-var services = new ServiceCollection();
-
-services.AddDbContext<HotelDbContext>(options =>
-    options.UseLazyLoadingProxies()
-           .UseSqlite("Data Source=hotel.db"));
-
-services.AddTransient<RoomService>();
-
-var provider = services.BuildServiceProvider();
-using var scope = provider.CreateScope();
-
-var context = scope.ServiceProvider.GetRequiredService<HotelDbContext>();
-if (context.Database.GetPendingMigrations().Any())
+namespace HotelApp.UI
 {
-    context.Database.Migrate();
-}
-
-var service = scope.ServiceProvider.GetRequiredService<RoomService>();
-service.SeedData();
-
-bool running = true;
-while (running)
-{
-    Console.WriteLine("\nОБЕРIТЬ ОПЕРАЦIЮ:");
-    Console.WriteLine("1. Показати доступнi номери (Eager Loading)");
-    Console.WriteLine("2. Показати доступнi номери (Lazy Loading)");
-    Console.WriteLine("3. Забронювати номер");
-    Console.WriteLine("4. Скасувати бронювання");
-    Console.WriteLine("5. Показати всi номери");
-    Console.WriteLine("6. Додати номер");
-    Console.WriteLine("7. Оновити номер");
-    Console.WriteLine("8. Видалити номер");
-    Console.WriteLine("0. Вийти");
-
-    var input = Console.ReadLine();
-
-    switch (input)
+    class Program
     {
-        case "1":
-            var eagerRooms = context.Rooms
-                .Include(r => r.Category)
-                .Include(r => r.Bookings)
-                .Where(r => r.Status == RoomStatus.Available)
-                .ToList();
+        static void Main(string[] args)
+        {
+            var services = new ServiceCollection();
 
-            Console.WriteLine("[EAGER] Доступнi номери:");
-            foreach (var room1 in eagerRooms)
-            {
-                Console.WriteLine($"ID: {room1.Id}, Номер: {room1.Number}, Категорiя: {room1.Category.Name}, " +
-                                  $"Цiна: {room1.Category.BasePrice} грн, Статус: {room1.Status}");
-            }
-            if (!eagerRooms.Any())
-            {
-                Console.WriteLine("На жаль, вiльних номерiв немає.");
-            }
-            break;
+            services.AddDbContext<HotelDbContext>(options =>
+                options.UseSqlite("Data Source=hotel.db"));
 
-        case "2":
-            var lazyRooms = context.Rooms
-                .Where(r => r.Status == RoomStatus.Available)
-                .ToList();
-
-            Console.WriteLine("[LAZY] Доступнi номери:");
-            foreach (var room1 in lazyRooms)
+            services.AddAutoMapper(cfg =>
             {
-                Console.WriteLine($"ID: {room1.Id}, Номер: {room1.Number}, Категорiя: {room1.Category.Name}, " +
-                                  $"Цiна: {room1.Category.BasePrice} грн, Статус: {room1.Status}");
-            }
-            if (!lazyRooms.Any())
-            {
-                Console.WriteLine("На жаль, вiльних номерiв немає.");
-            }
-            break;
+                cfg.CreateMap<Room, RoomModel>()
+                   .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category.Name))
+                   .ForMember(dest => dest.CategoryBasePrice, opt => opt.MapFrom(src => src.Category.BasePrice))
+                   .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()));
 
-        case "3":
+                cfg.CreateMap<RoomModel, Room>();
+                cfg.CreateMap<Booking, BookingModel>();
+                cfg.CreateMap<BookingModel, Booking>();
+            });
+
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped<IRoomService, RoomService>();
+
+            var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+
+            var context = scope.ServiceProvider.GetRequiredService<HotelDbContext>();
+            if (context.Database.GetPendingMigrations().Any())
+            {
+                context.Database.Migrate();
+            }
+
+            var service = scope.ServiceProvider.GetRequiredService<IRoomService>();
+            service.SeedData();
+
+            bool running = true;
+            while (running)
+            {
+                Console.WriteLine("\nОБЕРIТЬ ОПЕРАЦIЮ:");
+                Console.WriteLine("1. Показати доступнi номери");
+                Console.WriteLine("2. Забронювати номер");
+                Console.WriteLine("3. Скасувати бронювання");
+                Console.WriteLine("4. Показати всi номери");
+                Console.WriteLine("5. Додати номер");
+                Console.WriteLine("6. Оновити номер");
+                Console.WriteLine("7. Видалити номер");
+                Console.WriteLine("0. Вийти");
+
+                var input = Console.ReadLine();
+
+                try
+                {
+                    switch (input)
+                    {
+                        case "1":
+                            Console.Write("Введiть дату (yyyy-MM-dd): ");
+                            var date = DateTime.Parse(Console.ReadLine());
+                            var rooms = service.GetAvailableRooms(date);
+                            PrintRooms(rooms);
+                            break;
+
+                        case "2":
+                            BookRoom(service);
+                            break;
+
+                        case "3":
+                            Console.Write("ID номеру для зняття бронi: ");
+                            int cancelId = int.Parse(Console.ReadLine());
+                            service.CancelBooking(cancelId);
+                            Console.WriteLine("Бронювання скасовано.");
+                            break;
+
+                        case "4":
+                            var allRooms = service.GetAllRooms();
+                            PrintRooms(allRooms);
+                            break;
+
+                        case "5":
+                            AddRoom(service);
+                            break;
+
+                        case "6":
+                            UpdateRoom(service);
+                            break;
+
+                        case "7":
+                            Console.Write("ID кiмнати для видалення: ");
+                            int deleteId = int.Parse(Console.ReadLine());
+                            service.DeleteRoom(deleteId);
+                            Console.WriteLine("Кiмнату видалено.");
+                            break;
+
+                        case "0":
+                            running = false;
+                            break;
+
+                        default:
+                            Console.WriteLine("Невiдома команда.");
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Помилка: {ex.Message}");
+                }
+            }
+        }
+
+        static void PrintRooms(IEnumerable<RoomModel> rooms)
+        {
+            Console.WriteLine("\nСписок номерiв:");
+            foreach (var room in rooms)
+            {
+                Console.WriteLine($"ID: {room.Id}, Номер: {room.Number}, " +
+                    $"Категорiя: {room.CategoryName}, Цiна: {room.CategoryBasePrice}, Статус: {room.Status}");
+            }
+            if (!rooms.Any())
+            {
+                Console.WriteLine("Номери вiдсутнi.");
+            }
+        }
+
+        static void BookRoom(IRoomService service)
+        {
             Console.Write("ID номеру для бронювання: ");
-            int roomId = int.Parse(Console.ReadLine()!);
+            int roomId = int.Parse(Console.ReadLine());
             Console.Write("Початкова дата (yyyy-MM-dd): ");
-            var start = DateTime.Parse(Console.ReadLine()!);
+            var start = DateTime.Parse(Console.ReadLine());
             Console.Write("Кiнцева дата (yyyy-MM-dd): ");
-            var end = DateTime.Parse(Console.ReadLine()!);
-            Console.Write("Iм’я клiєнта: ");
-            var name = Console.ReadLine()!;
+            var end = DateTime.Parse(Console.ReadLine());
+            Console.Write("Iм'я клiєнта: ");
+            var name = Console.ReadLine();
 
             var (room, totalPrice, booking) = service.PreviewBooking(roomId, start, end, name);
             if (booking == null)
             {
                 Console.WriteLine("Бронювання неможливе. Перевiрте данi або доступнiсть.");
-                break;
+                return;
             }
 
-            Console.WriteLine($"Пiдтвердити бронювання {room!.Number} з {start:dd.MM} по {end:dd.MM} за {totalPrice} грн? (y/n)");
-            if (Console.ReadLine()!.ToLower() == "y")
+            Console.WriteLine($"Пiдтвердити бронювання {room.Number} з {start:dd.MM} по {end:dd.MM} за {totalPrice} грн? (y/n)");
+            if (Console.ReadLine().ToLower() == "y")
             {
                 service.ConfirmBooking(booking);
                 Console.WriteLine("Номер заброньовано.");
@@ -106,26 +165,14 @@ while (running)
             {
                 Console.WriteLine("Бронювання скасовано.");
             }
-            break;
+        }
 
-        case "4":
-            Console.Write("ID номеру для зняття бронi: ");
-            int cancelId = int.Parse(Console.ReadLine()!);
-            service.CancelBooking(cancelId);
-            Console.WriteLine("Бронювання скасовано.");
-            break;
+        static void AddRoom(IRoomService service)
+        {
+            Console.Write("Номер кiмнати: ");
+            string number = Console.ReadLine();
 
-        case "5":
-            var allRooms = service.GetAllRooms();
-            foreach (var r in allRooms)
-                Console.WriteLine($"ID: {r.Id}, Номер: {r.Number}, Статус: {r.Status}, Категорiя: {r.Category.Name}");
-            break;
-
-        case "6":
-            Console.Write("Номер кімнати: ");
-            string number = Console.ReadLine()!;
-
-            Console.WriteLine("Оберіть тип кімнати (1 - Standard, 2 - Deluxe): ");
+            Console.WriteLine("Оберiть тип кiмнати (1 - Standard, 2 - Deluxe): ");
             var roomType = Console.ReadLine();
 
             IRoomFactory factory = roomType == "2"
@@ -133,41 +180,37 @@ while (running)
                 : new StandardRoomFactory();
 
             service.AddRoomViaFactory(factory, number);
-            Console.WriteLine("Кімнату додано.");
-            break;
+            Console.WriteLine("Кiмнату додано.");
+        }
 
-        case "7":
+        static void UpdateRoom(IRoomService service)
+        {
             Console.Write("ID кiмнати для оновлення: ");
-            int updateId = int.Parse(Console.ReadLine()!);
-            var roomToUpdate = service.GetRoom(updateId);
-            if (roomToUpdate == null)
+            int updateId = int.Parse(Console.ReadLine());
+            var room = service.GetRoom(updateId);
+            if (room == null)
             {
                 Console.WriteLine("Кiмнату не знайдено.");
-                break;
+                return;
             }
-            Console.Write("Новий номер кiмнати: ");
-            roomToUpdate.Number = Console.ReadLine()!;
-            Console.Write("Новий ID категорiї: ");
-            roomToUpdate.CategoryId = int.Parse(Console.ReadLine()!);
-            Console.Write("Новий статус (0: Available, 1: Booked, 2: Occupied): ");
-            roomToUpdate.Status = (RoomStatus)int.Parse(Console.ReadLine()!);
-            service.UpdateRoom(roomToUpdate);
+
+            Console.Write("Новий номер кiмнати (поточний: {0}): ", room.Number);
+            var newNumber = Console.ReadLine();
+            if (!string.IsNullOrEmpty(newNumber))
+                room.Number = newNumber;
+
+            Console.Write("Новий ID категорiї (поточний: {0}): ", room.CategoryId);
+            var newCategoryId = Console.ReadLine();
+            if (!string.IsNullOrEmpty(newCategoryId))
+                room.CategoryId = int.Parse(newCategoryId);
+
+            Console.Write("Новий статус (0: Available, 1: Booked, 2: Occupied, поточний: {0}): ", room.Status);
+            var newStatus = Console.ReadLine();
+            if (!string.IsNullOrEmpty(newStatus))
+                room.Status = ((RoomStatus)int.Parse(newStatus)).ToString();
+
+            service.UpdateRoom(room);
             Console.WriteLine("Кiмнату оновлено.");
-            break;
-
-        case "8":
-            Console.Write("ID кiмнати для видалення: ");
-            int deleteId = int.Parse(Console.ReadLine()!);
-            service.DeleteRoom(deleteId);
-            Console.WriteLine("Кiмнату видалено.");
-            break;
-
-        case "0":
-            running = false;
-            break;
-
-        default:
-            Console.WriteLine("Невiдома команда.");
-            break;
+        }
     }
 }
