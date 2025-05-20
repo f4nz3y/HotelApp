@@ -15,12 +15,18 @@ namespace HotelApp.Core.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly Func<string, IRoomFactory> _roomFactoryResolver;
 
-        public RoomService(IUnitOfWork unitOfWork, IMapper mapper)
+        public RoomService(
+        IUnitOfWork unitOfWork,
+        IMapper mapper,
+        Func<string, IRoomFactory> roomFactoryResolver)
         {
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _roomFactoryResolver = roomFactoryResolver;
         }
+
 
         public IEnumerable<RoomModel> GetAvailableRooms(DateTime date)
         {
@@ -124,8 +130,9 @@ namespace HotelApp.Core.Services
             return _mapper.Map<RoomModel>(room);
         }
 
-        public void AddRoomViaFactory(IRoomFactory factory, string number)
+        public void AddRoomViaFactory(string factoryType, string number)
         {
+            var factory = _roomFactoryResolver(factoryType);
             var (room, category) = factory.CreateRoom(number);
 
             var existingCategory = _unitOfWork.CategoryRepository.Get(

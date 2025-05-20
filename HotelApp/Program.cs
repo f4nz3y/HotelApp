@@ -1,4 +1,5 @@
-﻿using AutoMapper;
+﻿using Autofac;
+using AutoMapper;
 using HotelApp.Core.Factories;
 using HotelApp.Core.Interfaces;
 using HotelApp.Core.Models;
@@ -18,36 +19,59 @@ namespace HotelApp.UI
     {
         static void Main(string[] args)
         {
-            var services = new ServiceCollection();
+            var builder = new ContainerBuilder();
 
-            services.AddDbContext<HotelDbContext>(options =>
-                options.UseSqlite("Data Source=hotel.db"));
-
-            services.AddAutoMapper(cfg =>
+            builder.Register(context =>
             {
-                cfg.CreateMap<Room, RoomModel>()
-                   .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category.Name))
-                   .ForMember(dest => dest.CategoryBasePrice, opt => opt.MapFrom(src => src.Category.BasePrice))
-                   .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()));
+                var config = new MapperConfiguration(cfg =>
+                {
+                    cfg.CreateMap<Room, RoomModel>()
+                       .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category.Name))
+                       .ForMember(dest => dest.CategoryBasePrice, opt => opt.MapFrom(src => src.Category.BasePrice))
+                       .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()));
 
-                cfg.CreateMap<RoomModel, Room>();
-                cfg.CreateMap<Booking, BookingModel>();
-                cfg.CreateMap<BookingModel, Booking>();
+                    cfg.CreateMap<RoomModel, Room>();
+                    cfg.CreateMap<Booking, BookingModel>();
+                    cfg.CreateMap<BookingModel, Booking>();
+                });
+                return config.CreateMapper();
+            }).As<IMapper>().SingleInstance();
+
+            builder.RegisterType<StandardRoomFactory>().As<IRoomFactory>().Named<IRoomFactory>("standard");
+            builder.RegisterType<DeluxeRoomFactory>().As<IRoomFactory>().Named<IRoomFactory>("deluxe");
+            builder.Register<Func<string, IRoomFactory>>(c =>
+            {
+                var context = c.Resolve<IComponentContext>();
+                return factoryType =>
+                {
+                    return factoryType switch
+                    {
+                        "deluxe" => context.ResolveNamed<IRoomFactory>("deluxe"),
+                        _ => context.ResolveNamed<IRoomFactory>("standard")
+                    };
+                };
             });
 
-            services.AddScoped<IUnitOfWork, UnitOfWork>();
-            services.AddScoped<IRoomService, RoomService>();
+            builder.RegisterType<UnitOfWork>().As<IUnitOfWork>();
+            builder.RegisterType<RoomService>().As<IRoomService>();
 
-            var provider = services.BuildServiceProvider();
-            using var scope = provider.CreateScope();
+            builder.Register(c =>
+            {
+                var optionsBuilder = new DbContextOptionsBuilder<HotelDbContext>();
+                optionsBuilder.UseSqlite("Data Source=hotel.db");
+                return new HotelDbContext(optionsBuilder.Options);
+            }).As<HotelDbContext>().InstancePerLifetimeScope();
 
-            var context = scope.ServiceProvider.GetRequiredService<HotelDbContext>();
+            var container = builder.Build();
+
+            var context = container.Resolve<HotelDbContext>();;
+
             if (context.Database.GetPendingMigrations().Any())
             {
                 context.Database.Migrate();
             }
 
-            var service = scope.ServiceProvider.GetRequiredService<IRoomService>();
+            var service = container.Resolve<IRoomService>();
             service.SeedData();
 
             bool running = true;
@@ -175,11 +199,8 @@ namespace HotelApp.UI
             Console.WriteLine("Оберiть тип кiмнати (1 - Standard, 2 - Deluxe): ");
             var roomType = Console.ReadLine();
 
-            IRoomFactory factory = roomType == "2"
-                ? new DeluxeRoomFactory()
-                : new StandardRoomFactory();
-
-            service.AddRoomViaFactory(factory, number);
+            string factoryType = roomType == "2" ? "deluxe" : "standard";
+            service.AddRoomViaFactory(factoryType, number);
             Console.WriteLine("Кiмнату додано.");
         }
 

@@ -13,7 +13,7 @@ namespace HotelApp.Core.Interfaces
         void CancelBooking(int roomId);
         IEnumerable<RoomModel> GetAllRooms();
         RoomModel GetRoom(int id);
-        void AddRoomViaFactory(IRoomFactory factory, string number);
+        void AddRoomViaFactory(string factoryType, string number);
         void UpdateRoom(RoomModel roomModel);
         void DeleteRoom(int id);
         void SeedData();
