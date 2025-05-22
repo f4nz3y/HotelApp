@@ -153,8 +153,15 @@ namespace HotelApp.Core.Services
 
         public void UpdateRoom(RoomModel roomModel)
         {
-            var room = _mapper.Map<Room>(roomModel);
-            _unitOfWork.RoomRepository.Update(room);
+            var existingRoom = _unitOfWork.RoomRepository.GetById(roomModel.Id);
+            if (existingRoom == null)
+                throw new KeyNotFoundException($"Room with id {roomModel.Id} not found");
+
+            existingRoom.Number = roomModel.Number;
+            existingRoom.CategoryId = roomModel.CategoryId;
+            existingRoom.Status = Enum.Parse<RoomStatus>(roomModel.Status);
+
+            _unitOfWork.RoomRepository.Update(existingRoom);
             _unitOfWork.Save();
         }
 

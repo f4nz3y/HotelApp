@@ -27,7 +27,6 @@
   <ItemGroup>
     <ProjectReference Include="..\HotelApp.Core\HotelApp.Core.csproj" />
     <ProjectReference Include="..\HotelApp.DAL\HotelApp.DAL.csproj" />
-    <ProjectReference Include="..\HotelApp\HotelApp.UI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
